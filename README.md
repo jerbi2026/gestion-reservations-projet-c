@@ -336,7 +336,7 @@ Ce projet est développé dans un cadre éducatif.
 
 ## 👥 Auteur
 
-Projet de gestion de réservations - Système de Salles de Réunion - JERBI AHMED - ABASSI JESSER - ABDELATIF RANA 
+Projet de gestion de réservations - Système de Salles de Réunion - JERBI AHMED - ABBASSI JESSER - ABDELLATIF RANA 
 
 
 
