@@ -263,6 +263,16 @@ Heure fin (ex: 12) : 13
 Veuillez choisir un autre créneau horaire.
 ```
 
+### 3D VISUALISATION
+<img width="1919" height="1078" alt="Capture d&#39;écran 2025-12-10 114224" src="https://github.com/user-attachments/assets/55b10a1a-2c05-46ae-90cb-3bc99b075f1b" />
+<img width="1919" height="1079" alt="Capture d&#39;écran 2025-12-10 114327" src="https://github.com/user-attachments/assets/993cafea-3426-4cb6-8309-232d5b21b346" />
+<img width="1919" height="1079" alt="Capture d&#39;écran 2025-12-10 114341" src="https://github.com/user-attachments/assets/6bf87152-b9fd-4cb2-a146-9ff700cb70ed" />
+<img width="1919" height="1079" alt="Capture d&#39;écran 2025-12-10 114347" src="https://github.com/user-attachments/assets/32e8e6d5-7c7a-43a1-85ab-6c14f96b96d7" />
+
+
+
+
+
 ## 📁 Fichiers Générés
 
 ### Fichiers de Données
