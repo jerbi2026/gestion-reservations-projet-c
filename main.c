@@ -4,10 +4,17 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
+#include <curl/curl.h>
 
 /******************************************
  *      STRUCTURES AVEC LISTES CHAÎNeES
  ******************************************/
+
+// Structure pour stocker la reponse de l'API
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
 
 typedef struct {
     char nom[30];
@@ -48,6 +55,8 @@ typedef struct NodeArbre {
     struct NodeArbre* gauche;
     struct NodeArbre* droit;
 } NodeArbre;
+
+
 
 /******************************************
  *    FONCTIONS LISTE CHAÎNEE - SALLES
@@ -327,12 +336,98 @@ void afficher_statistiques(NodeReservation* reservations, NodeSalle* salles) {
  *      BOT CONVERSATIONNEL (BONUS)
  ******************************************/
 
+ // Fonction callback pour recevoir les donnees de curl
+static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+    
+    char *ptr = realloc(mem->memory, mem->size + realsize + 1);
+    if(!ptr) {
+        printf("Erreur: pas assez de memoire\n");
+        return 0;
+    }
+    
+    mem->memory = ptr;
+    memcpy(&(mem->memory[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = 0;
+    
+    return realsize;
+}
+
+// Fonction pour extraire la reponse du JSON
+void extraire_reponse(const char *json, char *reponse, size_t taille_max) {
+    // Debug: afficher le JSON reçu
+    // printf("JSON reçu: %s\n", json);
+    
+    // Chercher "response":" ou "response" : " (avec espaces possibles)
+    const char *debut = strstr(json, "\"response\"");
+    if (debut == NULL) {
+        strcpy(reponse, "Erreur: champ 'response' non trouve");
+        return;
+    }
+    
+    // Avancer jusqu'au premier guillemet après "response"
+    debut = strchr(debut + 10, '\"');  // +10 pour sauter "response"
+    if (debut == NULL) {
+        strcpy(reponse, "Erreur: format JSON invalide");
+        return;
+    }
+    debut++; // Sauter le guillemet d'ouverture
+    
+    // Trouver la fin de la reponse
+    const char *fin = debut;
+    while (*fin != '\0') {
+        if (*fin == '\"' && *(fin - 1) != '\\') {
+            break;  // Guillemet non échappé trouvé
+        }
+        fin++;
+    }
+    
+    if (*fin == '\0') {
+        strcpy(reponse, "Erreur: fin de reponse non trouvee");
+        return;
+    }
+    
+    size_t longueur = fin - debut;
+    if (longueur >= taille_max) {
+        longueur = taille_max - 1;
+    }
+    
+    strncpy(reponse, debut, longueur);
+    reponse[longueur] = '\0';
+    
+    // Remplacer les echappements
+    char temp[2000];
+    int j = 0;
+    for (int i = 0; reponse[i] != '\0' && j < 1999; i++) {
+        if (reponse[i] == '\\' && reponse[i+1] == 'n') {
+            temp[j++] = '\n';
+            i++;
+        } else if (reponse[i] == '\\' && reponse[i+1] == '\"') {
+            temp[j++] = '\"';
+            i++;
+        } else if (reponse[i] == '\\' && reponse[i+1] == '\\') {
+            temp[j++] = '\\';
+            i++;
+        } else {
+            temp[j++] = reponse[i];
+        }
+    }
+    temp[j] = '\0';
+    strcpy(reponse, temp);
+}
+
+
 void bot_conversationnel(NodeSalle* salles, NodeReservation* reservations) {
-    char question[200];
+    char question[500];
     printf("  ________________________________________\n");
     printf("||    BOT D'ASSISTANCE - Posez votre     ||\n");
     printf("||         question (ou 'quitter')        ||\n");
     printf("╚________________________________________╝\n\n");
+    
+    // Initialiser curl globalement
+    curl_global_init(CURL_GLOBAL_ALL);
     
     while (1) {
         printf("Vous : ");
@@ -341,40 +436,76 @@ void bot_conversationnel(NodeSalle* salles, NodeReservation* reservations) {
         
         if (strcmp(question, "quitter") == 0) break;
         
-        // Convertir en minuscules
-        for (int i = 0; question[i]; i++) {
-            question[i] = tolower(question[i]);
+        // Preparer la requete JSON
+        char json_data[1000];
+        // Echapper les guillemets dans la question
+        char question_escaped[500];
+        int j = 0;
+        for (int i = 0; question[i] != '\0' && j < 498; i++) {
+            if (question[i] == '\"' || question[i] == '\\') {
+                question_escaped[j++] = '\\';
+            }
+            question_escaped[j++] = question[i];
+        }
+        question_escaped[j] = '\0';
+        
+        sprintf(json_data, "{\"question\":\"%s\"}", question_escaped);
+        
+        // Configuration curl
+        CURL *curl;
+        CURLcode res;
+        struct MemoryStruct chunk;
+        
+        chunk.memory = malloc(1);
+        chunk.size = 0;
+        
+        curl = curl_easy_init();
+        if(curl) {
+            struct curl_slist *headers = NULL;
+            headers = curl_slist_append(headers, "Content-Type: application/json");
+            
+            curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:5000/chat");
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_data);
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+
+            // Disable SSL verification for localhost (HTTP not HTTPS)
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+            //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+
+            
+            printf("Bot : ");
+            fflush(stdout);
+            
+            // Executer la requete
+            res = curl_easy_perform(curl);
+            
+            if(res != CURLE_OK) {
+                printf("Erreur de connexion: %s\n", curl_easy_strerror(res));
+                printf("Assurez-vous que le serveur Flask est lance (python app.py)\n");
+            } else {
+                // Extraire et afficher la reponse
+                char reponse[2000];
+                extraire_reponse(chunk.memory, reponse, sizeof(reponse));
+                printf("%s\n", reponse);
+            }
+            
+            // Nettoyage
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+        } else {
+            printf("Erreur: impossible d'initialiser curl\n");
         }
         
-        printf("Bot : ");
-        
-        if (strstr(question, "salles disponibles") || strstr(question, "combien de salles")) {
-            printf("Nous avons %d salles disponibles.\n", compter_salles(salles));
-        }
-        else if (strstr(question, "tarif") || strstr(question, "prix")) {
-            printf("Voici nos tarifs :\n");
-            NodeSalle* s = salles;
-            while (s != NULL) {
-                printf("  - %s : %.2f DT/heure\n", s->data.nom, s->data.tarif_horaire);
-                s = s->next;
-            }
-        }
-        else if (strstr(question, "reservations") || strstr(question, "combien")) {
-            printf("Vous avez %d reservations enregistrees.\n", compter_reservations(reservations));
-        }
-        else if (strstr(question, "capacite") || strstr(question, "personnes")) {
-            printf("Capacites de nos salles :\n");
-            NodeSalle* s = salles;
-            while (s != NULL) {
-                printf("  - %s : %d personnes\n", s->data.nom, s->data.capacite);
-                s = s->next;
-            }
-        }
-        else {
-            printf("Je peux vous aider avec : tarifs, salles disponibles, capacites, reservations.\n");
-        }
+        free(chunk.memory);
         printf("\n");
     }
+    
+    curl_global_cleanup();
 }
 
 /******************************************
@@ -560,7 +691,7 @@ int main() {
     printf("\n");
     printf("  ________________________________________\n");
     printf("||________________________________________||\n");
-    printf("||  SYSTeME DE GESTION DE ReSERVATIONS    ||\n");
+    printf("||  SYSTEME DE GESTION DE ReSERVATIONS    ||\n");
     printf("||         SALLES DE ReUNION              ||\n");
     printf("  ________________________________________\n");
     printf("  ________________________________________\n");
