@@ -398,8 +398,16 @@ void menu_salles(NodeSalle** salles) {
         
         if (choix == 1) {
             Salle s;
-            printf("Nom de la salle : ");
-            scanf("%s", s.nom);
+            int nbs=compter_salles(*salles);
+            char ch[20] = "salle";   // assez grand pour contenir "salleX"
+            char c = (char)(nbs + 65); // 0 → 'A', 1 → 'B', etc.
+
+            char ch1[2];   // 1 lettre + '\0'
+            ch1[0] = c;
+            ch1[1] = '\0';
+
+            strcat(ch, ch1);
+            strcpy(s.nom, ch);
             printf("Capacite : ");
             scanf("%d", &s.capacite);
             printf("Tarif horaire : ");
@@ -546,7 +554,7 @@ void menu_reservations(NodeReservation** reservations, NodeSalle* salles) {
 int main() {
     NodeSalle* salles = charger_salles();
     NodeReservation* reservations = charger_reservations();
-    
+    printf("%zu",sizeof(Salle));
     int choix;
     
     printf("\n");
@@ -599,21 +607,39 @@ int main() {
                 bot_conversationnel(salles, reservations);
                 break;
             case 0:
-                printf("\nAu revoir! 👋\n");
+                printf("\nAu revoir! \n");
                 break;
             default:
                 printf("Choix invalide!\n");
         }
+        
     } while (choix != 0);
-    
+    FILE *f=fopen("sal.bin","wb");
     // Liberation de la memoire
     while (salles != NULL) {
         NodeSalle* temp = salles;
+        
+        // Visualisation 3D
+        fwrite(&salles->data.nom,sizeof(char[30]),1,f);
+            fwrite(&salles->data.capacite,sizeof(int),1,f);
+            fwrite(&salles->data.tarif_horaire,sizeof(float),1,f);
+            fwrite(&salles->data.equipements,sizeof(char[200]),1,f);
         salles = salles->next;
         free(temp);
     }
+    f=fopen("res.bin","wb");
     while (reservations != NULL) {
         NodeReservation* temp = reservations;
+        // Visualisation 3D
+        fwrite(&reservations->data.id,sizeof(int),1,f);
+            fwrite(&reservations->data.nom_client,sizeof(char[50]),1,f);
+            fwrite(&reservations->data.salle,sizeof(char[30]),1,f);
+            fwrite(&reservations->data.date,sizeof(char[15]),1,f);
+            fwrite(&reservations->data.heure_debut,sizeof(int),1,f);
+            fwrite(&reservations->data.heure_fin,sizeof(int),1,f);
+            fwrite(&reservations->data.nombre_personnes,sizeof(int),1,f);
+            fwrite(&reservations->data.tarif_total,sizeof(float),1,f);
+            fwrite(&reservations->data.statut,sizeof(char[20]),1,f);
         reservations = reservations->next;
         free(temp);
     }

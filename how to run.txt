@@ -1,0 +1,2 @@
+gcc "systeme gestion de reservation.c" -o programme
+./programme
